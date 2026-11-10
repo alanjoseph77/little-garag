@@ -9,7 +9,8 @@ Little Cruisers: a little 3D garage and driving yard for kids, built as a mobile
 - Touch driving: steering under the left thumb, go and back under the right. Arrow keys and WASD work on a laptop.
 - Five paint colours for whichever vehicle is selected.
 - Drag to look around. The zoom is fixed.
-- Park in a blue bay (nose in or backed in, then stop) and it turns green. Fill every bay to finish the level; the next level unlocks and the surroundings grow: trees, then a town, then a city with a crane and a big wheel. Progress is saved on the device. The camera stays inside the building with the vehicle, so walls never vanish.
+- Park in a blue bay (nose in or backed in, then stop) and it turns green. Fill every bay to finish the level; the next level unlocks and the surroundings grow: trees, then a town, then a city with a crane and a big wheel. Progress is saved on the device.
+- The camera stays inside the building with the vehicle, so walls never vanish.
 - Walls, equipment and the other vehicle are solid.
 - Installable on a phone home screen and playable offline (PWA).
 
