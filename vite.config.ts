@@ -11,8 +11,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg'],
       manifest: {
-        name: 'Little Garage',
-        short_name: 'Little Garage',
+        name: 'Little Cruisers',
+        short_name: 'Little Cruisers',
         description: 'A little 3D garage for kids: pick a vehicle, paint it and drive it.',
         theme_color: '#1f6f78',
         background_color: '#bfe3f5',

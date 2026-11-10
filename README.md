@@ -1,6 +1,6 @@
-# Little Garage
+# Little Cruisers
 
-A little 3D garage for kids, built as a mobile web app. Pick a vehicle, paint it, and drive it out of the garage.
+Little Cruisers: a little 3D garage and driving yard for kids, built as a mobile web app. Pick a vehicle, paint it, and drive it out of the garage.
 
 ## What is in it
 
