@@ -8,7 +8,7 @@ A little 3D garage for kids, built as a mobile web app. Pick a vehicle, paint it
 - Two vehicles: a hatchback and an auto rickshaw. Each has its own speed and handling.
 - Touch driving: steering under the left thumb, go and back under the right. Arrow keys and WASD work on a laptop.
 - Five paint colours for whichever vehicle is selected.
-- Drag to look around, pinch to zoom. The camera stays inside the building with the vehicle, so walls never vanish.
+- Drag to look around. The zoom is fixed. The camera stays inside the building with the vehicle, so walls never vanish.
 - Walls, equipment and the other vehicle are solid.
 - Installable on a phone home screen and playable offline (PWA).
 

@@ -84,22 +84,15 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
     cones.push(cone);
   }
 
-  // ---------- camera orbit: drag to look around, pinch or scroll to zoom ----------
+  // ---------- camera orbit: drag to look around. The zoom is fixed, so pinching or scrolling never changes it ----------
   const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-  const orbit = { theta: 0.28, phi: 0.2, radius: 12 };
+  const orbit = { theta: 0.28, phi: 0.2, radius: 12 }; // radius never changes
   let touched = false;
   const pointers = new Map<number, { x: number; y: number }>();
-  let pinchStart = 0, radiusStart = 0;
-  const setRadius = (r: number) => { orbit.radius = Math.max(3.5, Math.min(24, r)); };
-  const pinchDistance = () => {
-    const pts = Array.from(pointers.values());
-    return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-  };
   const onPointerDown = (e: PointerEvent) => {
     touched = true;
     canvas.setPointerCapture(e.pointerId);
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (pointers.size === 2) { pinchStart = pinchDistance(); radiusStart = orbit.radius; }
   };
   const onPointerMove = (e: PointerEvent) => {
     const p = pointers.get(e.pointerId);
@@ -109,21 +102,13 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
     if (pointers.size === 1) {
       orbit.theta += dx * 0.008;
       orbit.phi = Math.max(0.05, Math.min(1.35, orbit.phi + dy * 0.006));
-    } else if (pointers.size === 2 && pinchStart > 0) {
-      setRadius((radiusStart * pinchStart) / Math.max(pinchDistance(), 1));
     }
   };
-  const onPointerEnd = (e: PointerEvent) => { pointers.delete(e.pointerId); pinchStart = 0; };
-  const onWheel = (e: WheelEvent) => {
-    e.preventDefault();
-    touched = true;
-    setRadius(orbit.radius * Math.exp(e.deltaY * 0.001));
-  };
+  const onPointerEnd = (e: PointerEvent) => { pointers.delete(e.pointerId); };
   canvas.addEventListener('pointerdown', onPointerDown);
   canvas.addEventListener('pointermove', onPointerMove);
   canvas.addEventListener('pointerup', onPointerEnd);
   canvas.addEventListener('pointercancel', onPointerEnd);
-  canvas.addEventListener('wheel', onWheel, { passive: false });
 
   // ---------- driving ----------
   const input: Record<InputKey, number> = { fwd: 0, back: 0, left: 0, right: 0 };
@@ -279,7 +264,6 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerup', onPointerEnd);
       canvas.removeEventListener('pointercancel', onPointerEnd);
-      canvas.removeEventListener('wheel', onWheel);
       renderer.dispose();
     }
   };
