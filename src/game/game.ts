@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { buildCar } from './car';
 import { buildGarage } from './garage';
 import { buildRickshaw } from './rickshaw';
+import { buildYard } from './yard';
 import type { Vehicle } from './kit';
 
 export type InputKey = 'fwd' | 'back' | 'left' | 'right';
@@ -60,23 +61,25 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
 
   // ---------- world ----------
   const garage = buildGarage(scene);
+  const yard = buildYard(scene);
+  const blocked = (x: number, z: number, r: number) => garage.hitsSolid(x, z, r) || yard.hitsSolid(x, z, r);
   const carV = buildCar();
   const rickV = buildRickshaw();
   const vehicles: Vehicle[] = [carV, rickV];
   vehicles.forEach((v) => scene.add(v.group));
   let active = carV;
 
-  // Cones to drive between, out past the garage door.
+  // Cones to weave between, in the yard out past the garage door.
   const coneMat = new THREE.MeshStandardMaterial({ color: 0xf26b1d, roughness: 0.6 });
   const cones: THREE.Group[] = [];
-  for (let c = 0; c < 8; c++) {
+  for (const spot of yard.cones) {
     const cone = new THREE.Group();
     const top = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.6, 18), coneMat);
     top.position.y = 0.33; top.castShadow = true;
     const base = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.5), coneMat);
     base.position.y = 0.025; base.castShadow = true;
     cone.add(top, base);
-    cone.position.set(10 + c * 4.5, 0, c % 2 ? 0.7 : -2.5);
+    cone.position.set(spot.x, 0, spot.z);
     scene.add(cone);
     cones.push(cone);
   }
@@ -168,11 +171,11 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
     const c = Math.cos(v.heading), sn = Math.sin(v.heading);
     v.x += c * v.speed * dt;
     v.z -= sn * v.speed * dt;
-    // Stop dead at a wall, the workbench or the other vehicle instead of driving through it.
+    // Stop dead at a wall, the workbench, the yard barrier or the other vehicle instead of driving through it.
     if (
       v.speed !== 0 &&
-      (garage.hitsSolid(v.x + c * 1.25, v.z - sn * 1.25, 0.7) ||
-        garage.hitsSolid(v.x - c * 1.25, v.z + sn * 1.25, 0.7) ||
+      (blocked(v.x + c * 1.25, v.z - sn * 1.25, 0.7) ||
+        blocked(v.x - c * 1.25, v.z + sn * 1.25, 0.7) ||
         touchesVehicle(v))
     ) {
       v.x = ox; v.z = oz; v.heading = oh; v.speed = 0;
