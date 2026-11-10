@@ -1,15 +1,23 @@
 // The small fenced driving yard out in front of the garage door:
-// tarmac with painted lines, a zebra crossing, two parking bays, a low barrier all round,
-// and the spots where the slalom cones stand.
+// tarmac with painted lines, a zebra crossing, a low barrier all round, and the parking bays.
+// The bays change from level to level: they start blue and turn green when a vehicle is parked in one.
 import * as THREE from 'three';
 import { canvasTexture, put } from './kit';
+import { BAY, type Bay } from './levels';
 
 export interface Yard {
   /** True if a circle of radius r at (x, z) touches the barrier. */
   hitsSolid(x: number, z: number, r: number): boolean;
-  /** Where each slalom cone stands (x, z). */
-  cones: { x: number; z: number }[];
+  /** Replace the parking bays (all blue). */
+  setBays(bays: Bay[]): void;
+  /** Turn bay number i green, with a little burst. */
+  markDone(i: number): void;
+  /** Advance the bay animations. */
+  update(dt: number): void;
 }
+
+const BLUE = 0x4da6ff;
+const GREEN = 0x2fd35f;
 
 // Yard edges. The garage door is on the west side (x = 4.6) and the yard opens straight onto it.
 const X0 = 4.8, X1 = 22.8, Z0 = -7.4, Z1 = 8.6;
@@ -49,27 +57,35 @@ function paintTarmac(g: CanvasRenderingContext2D) {
 
   // Stop line before the crossing.
   g.fillRect(X(7.9), Z(-3.8), 0.18 * PX, 9.4 * PX);
+}
 
-  // Two parking bays on the east side, each marked with a big P.
-  g.lineWidth = 7;
-  g.strokeStyle = '#7fc4ff';
-  g.fillStyle = 'rgba(127,196,255,0.9)';
+/** One bay's white lines and big P, open at the entrance (west) and closed at the far end (east). */
+function paintBay(g: CanvasRenderingContext2D) {
+  const w = BAY.len * PX, h = BAY.wid * PX, m = 8;
+  g.strokeStyle = '#ffffff';
+  g.fillStyle = '#ffffff';
+  g.lineWidth = 9;
+  g.lineJoin = 'round';
+  g.beginPath();
+  g.moveTo(0, m); g.lineTo(w - m, m); g.lineTo(w - m, h - m); g.lineTo(0, h - m);
+  g.stroke();
   g.font = `800 ${1.5 * PX}px Arial, Helvetica, sans-serif`;
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  [-1.6, 2.6].forEach((z) => {
-    const bx = 19.2, bw = 3.3, bd = 2.6;
-    g.beginPath();
-    g.moveTo(X(bx + bw), Z(z - bd / 2)); g.lineTo(X(bx), Z(z - bd / 2));
-    g.lineTo(X(bx), Z(z + bd / 2)); g.lineTo(X(bx + bw), Z(z + bd / 2));
-    g.stroke();
-    g.save();
-    g.translate(X(bx + bw / 2), Z(z));
-    g.rotate(Math.PI / 2); // letter tops point away from the garage
-    g.fillText('P', 0, 0);
-    g.restore();
-  });
+  g.save();
+  g.translate(w / 2, h / 2);
+  g.rotate(Math.PI / 2); // the top of the P points to the closed end
+  g.fillText('P', 0, 0);
+  g.restore();
 }
+
+interface BayView {
+  group: THREE.Group;
+  fill: THREE.MeshBasicMaterial;
+  lines: THREE.MeshBasicMaterial;
+  pulse: number; // seconds left of the pulse; 0 when idle
+}
+interface Ring { mesh: THREE.Mesh; age: number }
 
 export function buildYard(scene: THREE.Scene): Yard {
   const tarmacMat = new THREE.MeshStandardMaterial({ color: 0x4b5056, roughness: 1 });
@@ -130,8 +146,88 @@ export function buildYard(scene: THREE.Scene): Yard {
     return solids.some((b) => x > b[0] - r && x < b[1] + r && z > b[2] - r && z < b[3] + r);
   }
 
-  // Slalom: six cones, weaving either side of the centre lane.
-  const cones = Array.from({ length: 6 }, (_, c) => ({ x: 8.9 + c * 1.95, z: LANE + (c % 2 ? 1.7 : -1.7) }));
+  // ---------- parking bays ----------
+  const bayTexture = canvasTexture(BAY.len * PX, BAY.wid * PX, paintBay);
+  bayTexture.anisotropy = 8;
+  const bayGeo = new THREE.PlaneGeometry(BAY.len, BAY.wid);
+  const ringGeo = new THREE.RingGeometry(0.25, 0.4, 48);
+  const bayRoot = new THREE.Group();
+  scene.add(bayRoot);
+  let views: BayView[] = [];
+  const rings: Ring[] = [];
 
-  return { hitsSolid, cones };
+  const flat = (mat: THREE.Material, y: number) => {
+    const m = new THREE.Mesh(bayGeo, mat);
+    m.rotation.x = -Math.PI / 2;
+    m.position.y = y;
+    m.renderOrder = 2;
+    return m;
+  };
+  const decal = (extra: THREE.MeshBasicMaterialParameters) =>
+    new THREE.MeshBasicMaterial({
+      transparent: true, depthWrite: false,
+      polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, ...extra
+    });
+
+  function clearBays() {
+    views.forEach((v) => { v.fill.dispose(); v.lines.dispose(); });
+    rings.forEach((r) => { (r.mesh.material as THREE.Material).dispose(); });
+    rings.length = 0;
+    bayRoot.clear();
+    views = [];
+  }
+
+  function setBays(bays: Bay[]) {
+    clearBays();
+    views = bays.map((b) => {
+      const group = new THREE.Group();
+      group.position.set(b.x, 0, b.z);
+      group.rotation.y = b.angle;
+      const fill = decal({ color: BLUE, opacity: 0.3 });
+      const lines = decal({ color: BLUE, map: bayTexture });
+      group.add(flat(fill, 0.0375), flat(lines, 0.038));
+      bayRoot.add(group);
+      return { group, fill, lines, pulse: 0 };
+    });
+  }
+
+  function markDone(i: number) {
+    const v = views[i];
+    if (!v) return;
+    v.fill.color.setHex(GREEN);
+    v.fill.opacity = 0.5;
+    v.lines.color.setHex(GREEN);
+    v.pulse = 0.55;
+    const ring = new THREE.Mesh(ringGeo, decal({ color: GREEN, opacity: 0.9 }));
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(v.group.position.x, 0.045, v.group.position.z);
+    ring.renderOrder = 3;
+    scene.add(ring);
+    rings.push({ mesh: ring, age: 0 });
+  }
+
+  function update(dt: number) {
+    views.forEach((v) => {
+      if (v.pulse > 0) {
+        v.pulse = Math.max(0, v.pulse - dt);
+        const k = Math.sin((1 - v.pulse / 0.55) * Math.PI); // 0 > 1 > 0
+        v.group.scale.setScalar(1 + 0.1 * k);
+      }
+    });
+    for (let i = rings.length - 1; i >= 0; i--) {
+      const r = rings[i];
+      r.age += dt;
+      const t = r.age / 0.9;
+      if (t >= 1) {
+        scene.remove(r.mesh);
+        (r.mesh.material as THREE.Material).dispose();
+        rings.splice(i, 1);
+      } else {
+        r.mesh.scale.setScalar(1 + t * 7);
+        (r.mesh.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - t);
+      }
+    }
+  }
+
+  return { hitsSolid, setBays, markDone, update };
 }

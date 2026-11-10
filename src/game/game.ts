@@ -5,6 +5,9 @@ import { buildCar } from './car';
 import { buildGarage } from './garage';
 import { buildRickshaw } from './rickshaw';
 import { buildYard } from './yard';
+import { buildScenery } from './scenery';
+import { LEVELS } from './levels';
+import { playLevelComplete, playParked } from './sound';
 import type { Vehicle } from './kit';
 
 export type InputKey = 'fwd' | 'back' | 'left' | 'right';
@@ -12,6 +15,10 @@ export type InputKey = 'fwd' | 'back' | 'left' | 'right';
 export interface GameHooks {
   /** Called when the whole-number speed in km/h changes. */
   onSpeed(kmh: number): void;
+  /** Called when a level starts (done = 0) and each time a bay turns green. */
+  onProgress(done: number, total: number): void;
+  /** Called a moment after the last bay of a level turns green. */
+  onLevelComplete(level: number): void;
 }
 
 export interface Game {
@@ -20,8 +27,10 @@ export interface Game {
   selectVehicle(id: string): void;
   /** Repaint the active vehicle with a CSS hex colour. */
   paint(hex: string): void;
-  /** Put both vehicles and the cones back where they started. */
+  /** Put both vehicles and the cones back where they started. Green bays stay green. */
   reset(): void;
+  /** Start level n (1-based): new bays, cones and scenery, everything back at the start. */
+  setLevel(n: number): void;
   dispose(): void;
 }
 
@@ -62,6 +71,7 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
   // ---------- world ----------
   const garage = buildGarage(scene);
   const yard = buildYard(scene);
+  const scenery = buildScenery(scene);
   const blocked = (x: number, z: number, r: number) => garage.hitsSolid(x, z, r) || yard.hitsSolid(x, z, r);
   const carV = buildCar();
   const rickV = buildRickshaw();
@@ -69,17 +79,16 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
   vehicles.forEach((v) => scene.add(v.group));
   let active = carV;
 
-  // Cones to weave between, in the yard out past the garage door.
+  // A pool of cones; each level stands up as many as it needs.
   const coneMat = new THREE.MeshStandardMaterial({ color: 0xf26b1d, roughness: 0.6 });
   const cones: THREE.Group[] = [];
-  for (const spot of yard.cones) {
+  for (let c = 0; c < Math.max(...LEVELS.map((l) => l.cones.length)); c++) {
     const cone = new THREE.Group();
     const top = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.6, 18), coneMat);
     top.position.y = 0.33; top.castShadow = true;
     const base = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.5), coneMat);
     base.position.y = 0.025; base.castShadow = true;
     cone.add(top, base);
-    cone.position.set(spot.x, 0, spot.z);
     scene.add(cone);
     cones.push(cone);
   }
@@ -123,7 +132,59 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
     camShift.set(0, 0, 0);
     cones.forEach((cn) => { cn.rotation.set(0, 0, 0); cn.position.y = 0; cn.userData.down = false; });
   }
-  reset();
+
+  // ---------- levels and parking ----------
+  let level = 1;
+  let bays: { def: (typeof LEVELS)[number]['bays'][number]; done: boolean; hold: number }[] = [];
+  let doneCount = 0;
+  let completeIn = -1; // seconds until the "level complete" message; -1 = not finished
+
+  function setLevel(n: number) {
+    const def = LEVELS[n - 1];
+    if (!def) return;
+    level = n;
+    bays = def.bays.map((b) => ({ def: b, done: false, hold: 0 }));
+    doneCount = 0;
+    completeIn = -1;
+    yard.setBays(def.bays);
+    scenery.setLevel(n);
+    cones.forEach((cn, i) => {
+      const spot = def.cones[i];
+      cn.visible = !!spot;
+      if (spot) cn.position.x = spot.x, cn.position.z = spot.z;
+    });
+    reset();
+    hooks.onProgress(0, bays.length);
+  }
+
+  // A bay turns green once the active vehicle sits still in it, lined up with it (nose in or backed in).
+  function checkBays(dt: number) {
+    const v = active;
+    bays.forEach((b, i) => {
+      if (b.done) return;
+      const rx = v.x - b.def.x, rz = v.z - b.def.z;
+      const ca = Math.cos(b.def.angle), sa = Math.sin(b.def.angle);
+      const along = rx * ca - rz * sa, across = rx * sa + rz * ca;
+      const inside = Math.abs(along) < 1.0 && Math.abs(across) < 0.8;
+      const lined = Math.abs(Math.sin(v.heading - b.def.angle)) < 0.35;
+      if (inside && lined && Math.abs(v.speed) < 0.4) {
+        b.hold += dt;
+        if (b.hold >= 0.6) {
+          b.done = true;
+          doneCount++;
+          yard.markDone(i);
+          hooks.onProgress(doneCount, bays.length);
+          if (doneCount === bays.length) { completeIn = 0.9; playLevelComplete(); } else playParked();
+        }
+      } else {
+        b.hold = 0;
+      }
+    });
+    if (completeIn >= 0) {
+      completeIn -= dt;
+      if (completeIn < 0) { completeIn = -2; hooks.onLevelComplete(level); }
+    }
+  }
 
   // Each vehicle is three circles along its length; two vehicles touch when any pair of circles overlaps.
   function touchesVehicle(v: Vehicle) {
@@ -181,7 +242,7 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
     vehicles.forEach((v) => drive(v, v === active ? input : NO_INPUT, dt));
     camShift.multiplyScalar(Math.max(0, 1 - 6 * dt));
     cones.forEach((cn) => {
-      if (cn.userData.down) return;
+      if (!cn.visible || cn.userData.down) return;
       const dx = cn.position.x - active.x, dz = cn.position.z - active.z;
       if (dx * dx + dz * dz < 1.1 && Math.abs(active.speed) > 0.5) {
         cn.userData.down = true;
@@ -190,6 +251,9 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
         cn.position.y = 0.2;
       }
     });
+    checkBays(dt);
+    yard.update(dt);
+    scenery.update(dt);
     const kmh = Math.round(Math.abs(active.speed) * 3.6);
     if (kmh !== shownSpeed) { shownSpeed = kmh; hooks.onSpeed(kmh); }
   }
@@ -228,6 +292,8 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
   resizeObserver.observe(stage);
   resize();
 
+  setLevel(1);
+
   let raf = 0, last = performance.now();
   function frame(now: number) {
     const dt = Math.min(0.05, (now - last) / 1000);
@@ -257,6 +323,7 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
       active.paint.color.set(hex);
     },
     reset,
+    setLevel,
     dispose() {
       cancelAnimationFrame(raf);
       resizeObserver.disconnect();
