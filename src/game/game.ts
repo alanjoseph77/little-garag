@@ -5,9 +5,11 @@ import { buildCar } from './car';
 import { buildGarage } from './garage';
 import { buildRickshaw } from './rickshaw';
 import { buildYard } from './yard';
-import { buildScenery, HAZE } from './scenery';
+import { buildScenery, HAZE, NIGHT_HAZE } from './scenery';
+import { buildTasks } from './tasks';
 import { LEVELS } from './levels';
-import { playLevelComplete, playParked } from './sound';
+import { playDeliver, playLevelComplete, playParked, playPickup, playStar } from './sound';
+import { lampMat } from './kit';
 import type { Vehicle } from './kit';
 
 export type InputKey = 'fwd' | 'back' | 'left' | 'right';
@@ -15,8 +17,8 @@ export type InputKey = 'fwd' | 'back' | 'left' | 'right';
 export interface GameHooks {
   /** Called when the whole-number speed in km/h changes. */
   onSpeed(kmh: number): void;
-  /** Called when a level starts (done = 0) and each time a bay turns green. */
-  onProgress(done: number, total: number): void;
+  /** Called when a level starts (done = 0) and each time a job is done or a bay turns green. `message` is a cheer for the child. */
+  onProgress(done: number, total: number, message?: string): void;
   /** Called a moment after the last bay of a level turns green. */
   onLevelComplete(level: number): void;
 }
@@ -48,7 +50,8 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
   const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
 
   // ---------- lights ----------
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x9aa7b0, 2.0));
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x9aa7b0, 2.0);
+  scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xffffff, 2.2);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
@@ -62,6 +65,15 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
   const garage = buildGarage(scene);
   const yard = buildYard(scene);
   const scenery = buildScenery(scene);
+  const tasks = buildTasks(scene, (kind) => {
+    const { got, of } = tasks.stars;
+    if (kind === 'star') playStar(got - 1); else if (kind === 'pickup') playPickup(); else playDeliver();
+    const msg =
+      tasks.complete ? 'All done! Now park in the blue bay' :
+      kind === 'star' ? `Star ${got} of ${of}!` :
+      kind === 'pickup' ? 'Got the parcel! Take it to the green circle' : 'Delivered!';
+    reportProgress(msg);
+  });
   const blocked = (x: number, z: number, r: number) => garage.hitsSolid(x, z, r) || yard.hitsSolid(x, z, r);
   const carV = buildCar();
   const rickV = buildRickshaw();
@@ -123,32 +135,81 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
     cones.forEach((cn) => { cn.rotation.set(0, 0, 0); cn.position.y = 0; cn.userData.down = false; });
   }
 
+  // ---------- day and night ----------
+  const dayHaze = new THREE.Color(HAZE), nightHaze = new THREE.Color(NIGHT_HAZE);
+  const fog = scene.fog as THREE.Fog;
+  // Two headlights follow the active vehicle at night.
+  const beams = [0, 1].map(() => {
+    const l = new THREE.SpotLight(0xfff0cc, 150, 26, 0.62, 0.65, 1.2);
+    return { light: l, aim: l.target };
+  });
+  function setNight(on: boolean) {
+    hemi.color.set(on ? 0x8ea6ff : 0xffffff);
+    hemi.groundColor.set(on ? 0x232c4a : 0x9aa7b0);
+    hemi.intensity = on ? 1.05 : 2.0;
+    sun.color.set(on ? 0x9db5ff : 0xffffff);
+    sun.intensity = on ? 1.1 : 2.2;
+    scene.background = on ? nightHaze : dayHaze;
+    fog.color.copy(on ? nightHaze : dayHaze);
+    fog.near = on ? 25 : 45;
+    fog.far = on ? 120 : 170;
+    lampMat.emissiveIntensity = on ? 3 : 0.9;
+    scenery.setNight(on);
+    beams.forEach((b) => {
+      if (on) scene.add(b.light, b.aim); else scene.remove(b.light, b.aim);
+    });
+  }
+  function aimBeams(v: Vehicle) {
+    const c = Math.cos(v.heading), sn = Math.sin(v.heading);
+    [-0.55, 0.55].forEach((side, i) => {
+      const x = v.x + c * v.halfLen + sn * side, z = v.z - sn * v.halfLen + c * side;
+      beams[i].light.position.set(x, 0.75, z);
+      beams[i].aim.position.set(x + c * 9, 0, z - sn * 9);
+    });
+  }
+
   // ---------- levels and parking ----------
   let level = 1;
   let bays: { def: (typeof LEVELS)[number]['bays'][number]; done: boolean; hold: number }[] = [];
   let doneCount = 0;
   let completeIn = -1; // seconds until the "level complete" message; -1 = not finished
+  let bayOpen = true;  // false while stars or a parcel still have to be dealt with
+  let night = false;
+
+  /** Tell the page how far along the child is: jobs done plus bays parked. */
+  function reportProgress(message?: string) {
+    const total = tasks.total + bays.length, done = tasks.done + doneCount;
+    hooks.onProgress(done, total, done < total ? message : undefined);
+  }
 
   function setLevel(n: number) {
     const def = LEVELS[n - 1];
     if (!def) return;
     level = n;
+    night = !!def.night;
     bays = def.bays.map((b) => ({ def: b, done: false, hold: 0 }));
     doneCount = 0;
     completeIn = -1;
-    yard.setBays(def.bays);
-    scenery.setLevel(n);
+    tasks.setLevel(def);
+    bayOpen = tasks.complete;
+    yard.setBays(def.bays, !bayOpen);
+    scenery.setLevel(def.tier);
+    setNight(night);
     cones.forEach((cn, i) => {
       const spot = def.cones[i];
       cn.visible = !!spot;
       if (spot) cn.position.x = spot.x, cn.position.z = spot.z;
     });
     reset();
-    hooks.onProgress(0, bays.length);
+    reportProgress();
   }
 
   // A bay turns green once the active vehicle sits still in it, lined up with it (nose in or backed in).
   function checkBays(dt: number) {
+    if (!bayOpen) {
+      if (tasks.complete) { bayOpen = true; yard.showBays(); }
+      return;
+    }
     const v = active;
     bays.forEach((b, i) => {
       if (b.done) return;
@@ -163,7 +224,7 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
           b.done = true;
           doneCount++;
           yard.markDone(i);
-          hooks.onProgress(doneCount, bays.length);
+          reportProgress(`Parked! ${tasks.done + doneCount} of ${tasks.total + bays.length}`);
           if (doneCount === bays.length) { completeIn = 0.9; playLevelComplete(); } else playParked();
         }
       } else {
@@ -241,7 +302,9 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
         cn.position.y = 0.2;
       }
     });
+    tasks.update(dt, active.x, active.z);
     checkBays(dt);
+    if (night) aimBeams(active);
     yard.update(dt);
     scenery.update(dt);
     const kmh = Math.round(Math.abs(active.speed) * 3.6);

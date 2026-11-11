@@ -78,10 +78,9 @@ export default function App() {
     try {
       game = createGame(canvasRef.current, stageRef.current, {
         onSpeed: setSpeed,
-        onProgress: (done, total) => {
+        onProgress: (done, total, message) => {
           setProgress({ done, total });
-          if (done > 0 && done < total) setToast(`Parked! ${done} of ${total}`);
-          else setToast(null);
+          setToast(message ?? null);
         },
         onLevelComplete: (lvl) => {
           const next = Math.min(lvl + 1, LEVELS.length);
@@ -136,7 +135,7 @@ export default function App() {
 
   useEffect(() => {
     if (!toast) return;
-    const t = window.setTimeout(() => setToast(null), 1800);
+    const t = window.setTimeout(() => setToast(null), 2600);
     return () => window.clearTimeout(t);
   }, [toast]);
 

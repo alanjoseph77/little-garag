@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {
-  Batch, at, rng, noise2, vmat, tint, HORIZON,
+  Batch, at, rng, noise2, vmat, tint, HORIZON, NIGHT_HORIZON, nightSkyTexture, glowTexture,
   skyTexture, grassTexture, barkTexture, leafTexture, tuftTexture, flowerTexture, roofTexture, brickTexture,
   houseTextures, shopFrontTexture, roadTexture, pavingTexture, glassFacadeTexture, flatsFacadeTexture,
   latticeTexture, shadowTexture
@@ -18,12 +18,19 @@ import { canvasTexture } from './kit';
 export interface Scenery {
   /** Show the scenery for levels 1..n. */
   setLevel(n: number): void;
+  /** Switch between day and night: dark sky, glowing street lamps. */
+  setNight(on: boolean): void;
   /** Turn the big wheel and swing the crane. */
   update(dt: number): void;
 }
 
 /** Colour of the haze at the horizon; the game uses it for the fog. */
 export const HAZE = HORIZON;
+/** The same at night. */
+export const NIGHT_HAZE = NIGHT_HORIZON;
+
+/** Where the street lamp heads are, collected as the lamps are built. */
+const lampSpots: THREE.Vector3[] = [];
 
 const CX = 10, CZ = 0;            // middle of the playable area
 const SUN_X = 4 / 9, SUN_Z = 3 / 9; // how far a shadow reaches per metre of height (the sun is in the south-east)
@@ -248,6 +255,7 @@ function buildBackdrop(K: Kit): THREE.Group {
   );
   dome.position.set(CX, 0, CZ);
   dome.renderOrder = -10;
+  dome.name = 'dome';
   g.add(dome);
 
   // Grass, with large patches of lighter, darker and drier green so it never looks like one flat colour.
@@ -372,6 +380,7 @@ function lamp(b: Batch, K: Kit, x: number, z: number, ry: number) {
   put(box(1.15, 0.07, 0.07), K.metal, at(0.52, 4.56, 0, 0, 1, 0, 0.08), 0x3b4246);
   put(box(0.55, 0.1, 0.24), K.metal, at(1.05, 4.6, 0), 0x2f3538);
   put(box(0.42, 0.04, 0.17), K.glow, at(1.05, 4.535, 0), 0xfff4d6);
+  lampSpots.push(new THREE.Vector3(1.05, 4.5, 0).applyMatrix4(M));
 }
 
 function buildTown(K: Kit, P: Plants): THREE.Group {
@@ -555,15 +564,48 @@ function buildCity(K: Kit, P: Plants) {
 
 export function buildScenery(scene: THREE.Scene): Scenery {
   const K = makeKit(), P = makePlants(K);
-  scene.add(buildBackdrop(K));
+  lampSpots.length = 0;
+  const backdrop = buildBackdrop(K);
+  scene.add(backdrop);
+  const dome = backdrop.getObjectByName('dome') as THREE.Mesh;
+  const daySky = K.sky, nightSky = nightSkyTexture();
   const city = buildCity(K, P);
   const layers = [buildNature(K, P), buildTown(K, P), city.group];
   layers.forEach((l) => scene.add(l));
-  let t = 0;
+  let t = 0, tier = 1, night = false;
+
+  // At night every street lamp gets a halo and a warm pool of light on the ground.
+  const glowMap = glowTexture();
+  const haloMat = new THREE.SpriteMaterial({ map: glowMap, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, transparent: true });
+  const poolMat = new THREE.MeshBasicMaterial({
+    map: glowMap, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.55,
+    polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3
+  });
+  const poolGeo = new THREE.PlaneGeometry(7, 7).rotateX(-Math.PI / 2);
+  const lights = new THREE.Group();
+  lampSpots.forEach((p) => {
+    const halo = new THREE.Sprite(haloMat);
+    halo.position.copy(p); halo.scale.setScalar(2.6);
+    const pool = new THREE.Mesh(poolGeo, poolMat);
+    pool.position.set(p.x, 0.2, p.z);
+    lights.add(halo, pool);
+  });
+  lights.visible = false;
+  scene.add(lights);
+  const showLights = () => { lights.visible = night && tier >= 2; };
 
   return {
     setLevel(n) {
+      tier = n;
       layers.forEach((l, i) => { l.visible = i < n; });
+      showLights();
+    },
+    setNight(on) {
+      night = on;
+      (dome.material as THREE.MeshBasicMaterial).map = on ? nightSky : daySky;
+      (dome.material as THREE.MeshBasicMaterial).needsUpdate = true;
+      K.glow.emissiveIntensity = on ? 3 : 1.2;
+      showLights();
     },
     update(dt) {
       t += dt;

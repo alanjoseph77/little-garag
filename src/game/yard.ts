@@ -8,8 +8,10 @@ import { BAY, type Bay } from './levels';
 export interface Yard {
   /** True if a circle of radius r at (x, z) touches the barrier. */
   hitsSolid(x: number, z: number, r: number): boolean;
-  /** Replace the parking bays (all blue). */
-  setBays(bays: Bay[]): void;
+  /** Replace the parking bays (all blue). With `hidden` they stay out of sight until showBays(). */
+  setBays(bays: Bay[], hidden?: boolean): void;
+  /** Make hidden bays appear, with a little pop. */
+  showBays(): void;
   /** Turn bay number i green, with a little burst. */
   markDone(i: number): void;
   /** Advance the bay animations. */
@@ -177,18 +179,23 @@ export function buildYard(scene: THREE.Scene): Yard {
     views = [];
   }
 
-  function setBays(bays: Bay[]) {
+  function setBays(bays: Bay[], hidden = false) {
     clearBays();
     views = bays.map((b) => {
       const group = new THREE.Group();
       group.position.set(b.x, 0, b.z);
       group.rotation.y = b.angle;
+      group.visible = !hidden;
       const fill = decal({ color: BLUE, opacity: 0.3 });
       const lines = decal({ color: BLUE, map: bayTexture });
       group.add(flat(fill, 0.0375), flat(lines, 0.038));
       bayRoot.add(group);
       return { group, fill, lines, pulse: 0 };
     });
+  }
+
+  function showBays() {
+    views.forEach((v) => { v.group.visible = true; v.pulse = 0.55; });
   }
 
   function markDone(i: number) {
@@ -229,5 +236,5 @@ export function buildYard(scene: THREE.Scene): Yard {
     }
   }
 
-  return { hitsSolid, setBays, markDone, update };
+  return { hitsSolid, setBays, showBays, markDone, update };
 }

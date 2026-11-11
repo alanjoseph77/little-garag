@@ -10,6 +10,7 @@ Little Cruisers: a little 3D garage and driving yard for kids, built as a mobile
 - Five paint colours for whichever vehicle is selected.
 - Drag to look around. The zoom is fixed.
 - Park in a blue bay (nose in or backed in, then stop) and it turns green. Fill every bay to finish the level; the next level unlocks and the surroundings grow: trees, then a town, then a city with a crane and a big wheel. Progress is saved on the device.
+- Six levels: Little Yard, Little Town, Big City, then **Night Drive** (dark sky, glowing lamps, headlights), **Star Hunt** (collect 5 stars, then the bay appears) and **Delivery Run** (pick up the parcel, take it to the green circle, then park).
 - The camera stays inside the building with the vehicle, so walls never vanish.
 - Walls, equipment and the other vehicle are solid.
 - Installable on a phone home screen and playable offline (PWA).
@@ -38,7 +39,8 @@ src/
   ui/DriveButton.tsx press-and-hold driving button
   game/
     game.ts          scene, lights, camera, driving, collisions; exposes a small API to React
-    levels.ts        the levels: bays, cones, goals (add a level here)
+    levels.ts        the levels: bays, cones, stars, parcel, night, goals (add a level here)
+    tasks.ts         the stars and the parcel that come before parking
     yard.ts          the fenced yard and its parking bays
     scenery.ts       sky, grass, hills, trees, town and city around the yard
     scenery-kit.ts   painted textures and the batcher that merges scenery into few meshes
@@ -61,4 +63,4 @@ To add a vehicle: write a `buildSomething()` in `src/game/` that returns a `Vehi
 
 ## Direct links to a level
 
-Add `?level=2` or `?level=3` to the address to start that level straight away (it also unlocks it), for example `https://little-garage.littlegarage.workers.dev/?level=2`. Handy for a YouTube video per level.
+Add `?level=2` up to `?level=6` to the address to start that level straight away (it also unlocks it), for example `https://little-garage.littlegarage.workers.dev/?level=2`. Handy for a YouTube video per level.

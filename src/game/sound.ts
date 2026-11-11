@@ -43,3 +43,20 @@ export function playLevelComplete() {
   [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => note(f, i * 0.13, 0.34, 0.18));
   note(1318.5, 0.58, 0.6, 0.16);
 }
+
+/** A star was collected; each one is a little higher than the last. */
+export function playStar(n: number) {
+  note(784 * Math.pow(1.1225, n), 0, 0.22, 0.17);
+  note(1174.7 * Math.pow(1.1225, n), 0.08, 0.28, 0.14);
+}
+
+/** The parcel was picked up. */
+export function playPickup() {
+  note(523.25, 0, 0.14);
+  note(783.99, 0.1, 0.3);
+}
+
+/** The parcel was delivered. */
+export function playDeliver() {
+  [659.25, 783.99, 987.77].forEach((f, i) => note(f, i * 0.1, 0.3, 0.17));
+}

@@ -98,6 +98,7 @@ const speckle = (c: CanvasRenderingContext2D, w: number, h: number, n: number, a
 };
 
 export const HORIZON = '#d9e8f0';
+export const NIGHT_HORIZON = '#1d2c58';
 
 /** Sky from deep blue overhead to pale haze at the horizon, with soft clouds. Wraps round the world. */
 export function skyTexture(): THREE.CanvasTexture {
@@ -136,6 +137,54 @@ export function skyTexture(): THREE.CanvasTexture {
     const hz = c.createLinearGradient(0, H * 0.4, 0, H / 2);
     hz.addColorStop(0, 'rgba(255,255,255,0)'); hz.addColorStop(1, 'rgba(255,255,255,0.35)');
     c.fillStyle = hz; c.fillRect(0, H * 0.4, W, H * 0.1);
+  });
+}
+
+/** The night sky: deep blue, a haze of town glow at the horizon, a big moon and plenty of stars. */
+export function nightSkyTexture(): THREE.CanvasTexture {
+  const W = 2048, H = 1024, r = rng(77);
+  return canvasTexture(W, H, (c) => {
+    const g = c.createLinearGradient(0, 0, 0, H / 2);
+    g.addColorStop(0, '#050a1c');
+    g.addColorStop(0.5, '#10204a');
+    g.addColorStop(0.85, '#22366b');
+    g.addColorStop(1, NIGHT_HORIZON);
+    c.fillStyle = g; c.fillRect(0, 0, W, H / 2);
+    c.fillStyle = NIGHT_HORIZON; c.fillRect(0, H / 2, W, H / 2);
+    // Stars: most in the band the camera can see.
+    for (let i = 0; i < 700; i++) {
+      const y = H * (0.08 + r() * 0.4), big = r() < 0.08;
+      c.fillStyle = `rgba(255,255,${230 + Math.floor(r() * 25)},${0.35 + r() * 0.6})`;
+      c.beginPath(); c.arc(r() * W, y, big ? 2.6 : 0.8 + r() * 1.2, 0, Math.PI * 2); c.fill();
+    }
+    // The moon, with a soft glow.
+    const mx = W * 0.3, my = H * 0.33;
+    const glow = c.createRadialGradient(mx, my, 10, mx, my, 150);
+    glow.addColorStop(0, 'rgba(210,225,255,0.55)'); glow.addColorStop(1, 'rgba(210,225,255,0)');
+    c.fillStyle = glow; c.beginPath(); c.arc(mx, my, 150, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#f4f1e2'; c.beginPath(); c.arc(mx, my, 44, 0, Math.PI * 2); c.fill();
+    c.fillStyle = 'rgba(190,190,170,0.35)';
+    for (const [dx, dy, rad] of [[-12, -8, 9], [14, 6, 12], [-6, 18, 6], [10, -18, 5]]) {
+      c.beginPath(); c.arc(mx + dx, my + dy, rad, 0, Math.PI * 2); c.fill();
+    }
+    // A few thin clouds catching the moonlight.
+    for (let k = 0; k < 14; k++) {
+      const cx = r() * W, cy = H * (0.36 + r() * 0.1), w = 120 + r() * 220;
+      const p = c.createRadialGradient(cx, cy, 0, cx, cy, w);
+      p.addColorStop(0, 'rgba(120,140,190,0.22)'); p.addColorStop(1, 'rgba(120,140,190,0)');
+      c.fillStyle = p; c.beginPath(); c.ellipse(cx, cy, w, w * 0.18, 0, 0, Math.PI * 2); c.fill();
+    }
+  });
+}
+
+/** A soft warm blob of light, used for lamp halos and the pools on the ground. */
+export function glowTexture(): THREE.CanvasTexture {
+  return canvasTexture(128, 128, (c) => {
+    const g = c.createRadialGradient(64, 64, 0, 64, 64, 64);
+    g.addColorStop(0, 'rgba(255,236,180,1)');
+    g.addColorStop(0.35, 'rgba(255,210,120,0.45)');
+    g.addColorStop(1, 'rgba(255,200,100,0)');
+    c.fillStyle = g; c.fillRect(0, 0, 128, 128);
   });
 }
 
