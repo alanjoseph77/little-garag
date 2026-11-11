@@ -38,7 +38,17 @@ function saveUnlocked(n: number) {
   try { localStorage.setItem(SAVE_KEY, String(n)); } catch { /* private mode: progress lasts until the page closes */ }
 }
 
-const CONFETTI = ['#d7263d', '#ffd23f', '#1b7fbd', '#2fa84f', '#ff8a1f', '#b36bff'];
+/** The level named by the link: ?level=2, #level2 or /level2. Returns 1 when there is none. */
+function linkedLevel(): number {
+  const m =
+    /[?&]level=(\d+)/.exec(location.search) ??
+    /^#?\/?level-?(\d+)/i.exec(location.hash) ??
+    /\/level-?(\d+)\/?$/i.exec(location.pathname);
+  const n = m ? Number(m[1]) : 1;
+  return Number.isInteger(n) ? Math.min(Math.max(n, 1), LEVELS.length) : 1;
+}
+
+const CONFETTI =['#d7263d', '#ffd23f', '#1b7fbd', '#2fa84f', '#ff8a1f', '#b36bff'];
 
 export default function App() {
   const stageRef = useRef<HTMLDivElement>(null);
@@ -85,6 +95,13 @@ export default function App() {
       return;
     }
     gameRef.current = game;
+    // A shared link such as ?level=2 starts that level straight away and unlocks it.
+    const want = linkedLevel();
+    if (want > 1) {
+      if (want > unlockedRef.current) { setUnlocked(want); saveUnlocked(want); }
+      game.setLevel(want);
+      setLevel(want);
+    }
     return () => {
       game.dispose();
       gameRef.current = null;

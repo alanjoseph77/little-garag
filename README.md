@@ -58,3 +58,7 @@ To add a vehicle: write a `buildSomething()` in `src/game/` that returns a `Vehi
 - Stars or balloons to collect in place of the cones.
 - More vehicles: bus, tractor, fire engine, ambulance.
 - Spoken colour and vehicle names, in English and a local language.
+
+## Direct links to a level
+
+Add `?level=2` or `?level=3` to the address to start that level straight away (it also unlocks it), for example `https://little-garage.littlegarage.workers.dev/?level=2`. Handy for a YouTube video per level.
