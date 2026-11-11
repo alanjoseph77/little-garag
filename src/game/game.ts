@@ -5,7 +5,7 @@ import { buildCar } from './car';
 import { buildGarage } from './garage';
 import { buildRickshaw } from './rickshaw';
 import { buildYard } from './yard';
-import { buildScenery } from './scenery';
+import { buildScenery, HAZE } from './scenery';
 import { LEVELS } from './levels';
 import { playLevelComplete, playParked } from './sound';
 import type { Vehicle } from './kit';
@@ -34,8 +34,6 @@ export interface Game {
   dispose(): void;
 }
 
-const SKY = 0xbfe3f5;
-const GROUND = 0x8fc98a;
 
 export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks: GameHooks): Game {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -44,8 +42,9 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(SKY);
-  scene.fog = new THREE.Fog(SKY, 30, 80);
+  // The sky itself is a painted dome in the scenery; distant things fade into the haze at its horizon.
+  scene.background = new THREE.Color(HAZE);
+  scene.fog = new THREE.Fog(new THREE.Color(HAZE), 45, 170);
   const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
 
   // ---------- lights ----------
@@ -58,15 +57,6 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
   sun.shadow.camera.near = 1; sun.shadow.camera.far = 30;
   sun.shadow.bias = -0.0006;
   scene.add(sun, sun.target);
-
-  // ---------- ground ----------
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(400, 400),
-    new THREE.MeshStandardMaterial({ color: GROUND, roughness: 1 })
-  );
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
-  scene.add(ground);
 
   // ---------- world ----------
   const garage = buildGarage(scene);
@@ -261,8 +251,6 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
   let camDist = 0;
   function place(dt: number) {
     const tx = active.x + camShift.x, tz = active.z + camShift.z;
-    // Keep the ground under the vehicle so the world never runs out.
-    ground.position.set(tx, -0.021, tz);
     sun.position.set(tx + 4, 9, tz + 3);
     sun.target.position.set(tx, 0, tz);
     // Under the roof, flatten the viewing angle until the ceiling is no longer in the way,

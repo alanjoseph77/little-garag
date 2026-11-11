@@ -40,7 +40,8 @@ src/
     game.ts          scene, lights, camera, driving, collisions; exposes a small API to React
     levels.ts        the levels: bays, cones, goals (add a level here)
     yard.ts          the fenced yard and its parking bays
-    scenery.ts       trees, town and city around the yard
+    scenery.ts       sky, grass, hills, trees, town and city around the yard
+    scenery-kit.ts   painted textures and the batcher that merges scenery into few meshes
     sound.ts         little chimes made with Web Audio
     kit.ts           shared materials, geometry helpers, the wheel, the Vehicle type
     car.ts           the hatchback
