@@ -67,6 +67,15 @@ body {
 .home svg { width: 28px; height: 28px; fill: var(--teal); }
 .home:active { transform: translateY(2px); box-shadow: none; }
 
+.right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.cam {
+  height: 38px; padding: 0 14px; border: 0; border-radius: 14px;
+  background: var(--panel); color: var(--ink); box-shadow: var(--shadow);
+  font-size: 15px; font-weight: 800; line-height: 1;
+}
+.cam[aria-pressed='true'] { background: var(--teal); color: #fff; }
+.cam:active { transform: translateY(2px); box-shadow: none; }
+
 .bottom { display: flex; flex-direction: column; gap: 14px; }
 
 .paints {

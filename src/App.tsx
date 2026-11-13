@@ -62,6 +62,9 @@ export default function App() {
     () => Object.fromEntries(VEHICLES.map((v) => [v.id, v.paint]))
   );
   const [level, setLevel] = useState(1);
+  const [camMode, setCamMode] = useState<'follow' | 'fixed'>(() => {
+    try { return localStorage.getItem('little-cruisers:cam') === 'fixed' ? 'fixed' : 'follow'; } catch { return 'follow'; }
+  });
   const [unlocked, setUnlocked] = useState(loadUnlocked);
   const [progress, setProgress] = useState({ done: 0, total: LEVELS[0].bays.length });
   const [toast, setToast] = useState<string | null>(null);
@@ -94,6 +97,7 @@ export default function App() {
       return;
     }
     gameRef.current = game;
+    try { game.setCameraMode(localStorage.getItem('little-cruisers:cam') === 'fixed' ? 'fixed' : 'follow'); } catch { /* keep the default */ }
     // A shared link such as ?level=2 starts that level straight away and unlocks it.
     const want = linkedLevel();
     if (want > 1) {
@@ -195,6 +199,7 @@ export default function App() {
               </span>
             </button>
           </div>
+          <div className="right">
           <div className="dash">
             <div className="speed" aria-label={`Speed ${speed} kilometres per hour`}>
               <span className="speed-num">{speed}</span>
@@ -203,6 +208,21 @@ export default function App() {
             <button type="button" className="home" onClick={() => gameRef.current?.reset()} aria-label="Back to the garage">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>
             </button>
+          </div>
+          <button
+            type="button"
+            className="cam"
+            aria-pressed={camMode === 'follow'}
+            aria-label={camMode === 'follow' ? 'Camera follows the vehicle. Tap to keep it fixed' : 'Camera is fixed. Tap to follow the vehicle'}
+            onClick={() => {
+              const next = camMode === 'follow' ? 'fixed' : 'follow';
+              setCamMode(next);
+              gameRef.current?.setCameraMode(next);
+              try { localStorage.setItem('little-cruisers:cam', next); } catch { /* not saved */ }
+            }}
+          >
+            Camera: {camMode === 'follow' ? 'Follow' : 'Fixed'}
+          </button>
           </div>
         </div>
 

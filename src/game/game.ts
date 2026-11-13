@@ -33,6 +33,8 @@ export interface Game {
   reset(): void;
   /** Start level n (1-based): new bays, cones and scenery, everything back at the start. */
   setLevel(n: number): void;
+  /** 'follow': the camera stays behind the vehicle as it turns. 'fixed': it stays where you left it. */
+  setCameraMode(mode: 'follow' | 'fixed'): void;
   dispose(): void;
 }
 
@@ -99,9 +101,12 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
   const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
   const orbit = { theta: 0.28, phi: 0.2, radius: 12 }; // radius never changes
   let touched = false;
+  let camMode: 'follow' | 'fixed' = 'follow';
+  let camIdle = 0; // seconds since the last drag; the follow camera waits a moment after you look around
   const pointers = new Map<number, { x: number; y: number }>();
   const onPointerDown = (e: PointerEvent) => {
     touched = true;
+    camIdle = 0;
     canvas.setPointerCapture(e.pointerId);
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   };
@@ -311,6 +316,20 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
     if (kmh !== shownSpeed) { shownSpeed = kmh; hooks.onSpeed(kmh); }
   }
 
+  const wrap = (a: number) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
+
+  /** Follow camera: swing round behind the vehicle, quicker when it is moving, and level out the view. */
+  function follow(dt: number) {
+    if (camMode !== 'follow' || !touched) return;
+    if (pointers.size > 0) { camIdle = 0; return; }
+    camIdle += dt;
+    if (camIdle < 1.2) return; // let the child look around first
+    const moving = Math.abs(active.speed) > 0.4 || input.fwd || input.back;
+    const k = 1 - Math.exp(-(moving ? 2.4 : 0.9) * dt);
+    orbit.theta += wrap(Math.PI - active.heading - orbit.theta) * k;
+    orbit.phi += (0.3 - orbit.phi) * k * 0.7;
+  }
+
   let camDist = 0;
   function place(dt: number) {
     const tx = active.x + camShift.x, tz = active.z + camShift.z;
@@ -351,6 +370,7 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
     last = now;
     if (!touched && !reduceMotion) orbit.theta += dt * 0.15; // slow turntable until someone plays
     step(dt);
+    follow(dt);
     place(dt);
     renderer.render(scene, camera);
     raf = requestAnimationFrame(frame);
@@ -372,6 +392,10 @@ export function createGame(canvas: HTMLCanvasElement, stage: HTMLElement, hooks:
     },
     paint(hex) {
       active.paint.color.set(hex);
+    },
+    setCameraMode(mode) {
+      camMode = mode;
+      camIdle = 9;
     },
     reset,
     setLevel,

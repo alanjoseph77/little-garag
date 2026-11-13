@@ -63,4 +63,6 @@ To add a vehicle: write a `buildSomething()` in `src/game/` that returns a `Vehi
 
 ## Direct links to a level
 
+The camera follows behind the vehicle as it turns (drag to look around; it swings back after a moment). The **Camera** button switches to a fixed view.
+
 Add `?level=2` up to `?level=6` to the address to start that level straight away (it also unlocks it), for example `https://little-garage.littlegarage.workers.dev/?level=2`. Handy for a YouTube video per level.
